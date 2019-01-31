@@ -2,15 +2,23 @@
 #include <Windows.h>
 #include <TlHelp32.h>
 #include <thread>
+#include <mmsystem.h>
 #include "SlimMem.h"
 
 SlimUtils::SlimMem mem;
 DWORD pid;
 
+
 struct Offset {
 	DWORD dwLocalPlayer = 0xCBD6A4;
 	DWORD m_fFlags = 0x104;
 	DWORD dwForceJump = 0x5170E70;
+	int m_iTeamNum = 0xF4;
+	int m_iCrosshairId = 0xB394;
+	DWORD dwEntityList = 0x4CCDCBC;
+	bool m_bDormant = 0xED;
+	int dwForceAttack = 0x30FF378;
+	int TotalHitCount = 0xA388;
 }O;
 struct Values {
 	DWORD localPlayer;
@@ -51,6 +59,30 @@ bool GetPlayer()
 	return true;
 
 }
+void bhop()
+{
+	V.flag = mem.Read<BYTE>(V.localPlayer + O.m_fFlags);
+	if (GetAsyncKeyState(VK_SPACE) && V.flag & (1 << 0)) // if on ground then jump
+	{
+		mem.Write<DWORD>(V.gameModule + O.dwForceJump, 6);
+	}
+}
+
+void trigger()
+{
+	int LocalPlayer_inCross = mem.Read<int>(V.localPlayer + O.m_iCrosshairId);
+	int LocalPlayer_Team = mem.Read<int>(V.localPlayer + O.m_iTeamNum);
+
+	DWORD Trigger_EntityBase = mem.Read<DWORD>(V.gameModule + O.dwEntityList + ((LocalPlayer_inCross - 1) * 0x10));
+	int Trigger_EntityTeam = mem.Read<int>(Trigger_EntityBase + O.m_iTeamNum);
+	bool Trigger_EntityDormant = mem.Read<bool>(Trigger_EntityBase + O.m_bDormant);
+
+	if ((LocalPlayer_inCross > 0 && LocalPlayer_inCross <= 64) && (Trigger_EntityBase != NULL) && (Trigger_EntityTeam != LocalPlayer_Team) && (!Trigger_EntityDormant))
+	{
+		Sleep(10);
+		mem.Write<int>(V.gameModule + O.dwForceAttack, 5);
+	}
+}
 
 int main()
 {
@@ -67,15 +99,17 @@ int main()
 
 	std::cout << "test";
 
-	//bhop();
 	while (true)
 	{
 		GetPlayer();
-		//bhop
-		V.flag = mem.Read<BYTE>(V.localPlayer + O.m_fFlags);
-		if (GetAsyncKeyState(VK_SPACE) && V.flag & (1 << 0)) // if on ground then jump
+		bool hit = false;
+
+		int hitcount = mem.Read<int>(V.localPlayer + O.TotalHitCount);
+		int oldhit=1;
+		if (hitcount > oldhit)
 		{
-			mem.Write<DWORD>(V.gameModule + O.dwForceJump, 6);
+			PlaySound(("hit.wav"), NULL, SND_SYNC);
+			std::cout << hitcount << std::endl;
 		}
 	}
 
